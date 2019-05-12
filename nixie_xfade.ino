@@ -1,3 +1,5 @@
+#include <Wire.h>
+
 // Create an IntervalTimer object 
 IntervalTimer nixieTimer;
 
@@ -113,6 +115,10 @@ void setup() {
   pinMode(13, OUTPUT);
   Serial.begin(115200);
   Serial.setTimeout(-1);
+
+  Wire.begin(9);                // join i2c bus with address #9
+  Wire.onReceive(wireReceiveEvent); // register event
+  
   nixieTimer.begin(writeDigit,digitMicros[4]);  //set up timer
   Serial.println("Nixie Display (C) W. Esposito 2018. To update display, send via serial: X Y\\n as ASCII text where X is the tube number and Y is the value 0-10 (where 10 is off). To crossfade to the new value send X Y 1\\n.");
 }
@@ -153,10 +159,25 @@ void newDigit(int tubeNum, int newValue, bool dpl, bool dpr)
   digitValues[tubeNum+4] = newValue;
 }
 
-//elapsedMillis changeTimer = 10000;
-//int tubeCount = 0;
-void loop() {
-  String inMsg = Serial.readStringUntil('\n');
+// function that executes whenever data is received from master
+// this function is registered as an event, see setup()
+String wireBuffer = "";
+void wireReceiveEvent(int howMany)
+{
+  while(Wire.available() > 1) {  // loop through all but the last
+    char c = Wire.read();        // receive byte as a character
+    wireBuffer += c;
+    if(c == '\n')
+    {
+      parseInString(wireBuffer);
+      wireBuffer = String();
+    }
+  }
+}
+
+
+void parseInString(String inMsg)
+{
   int tubeVal = inMsg.substring(0, inMsg.indexOf(" ")).toInt();
   inMsg = inMsg.substring(inMsg.indexOf(" ")).trim();
   String valStr = inMsg.substring(0, inMsg.indexOf(" ")).trim();
@@ -185,24 +206,11 @@ void loop() {
   {
     newDigit(tubeVal, newVal, dpl, dpr);
   }
-//  if(changeTimer > 1000)
-//  {
-//    changeTimer = 0;
-//    
-//    //mock update
-//    
-//    
-//    int newValue = random(0,15); //array to store the value of each digit, and decimal point.
-//    if(random(0,2))
-//    {
-//      newDigit(tubeCount, newValue);
-//    }
-//    else
-//    {
-//      newDigitFade(tubeCount, newValue);
-//    }
-//
-//    tubeCount++;
-//    tubeCount %= 4;
-//  }
+}
+
+//elapsedMillis changeTimer = 10000;
+//int tubeCount = 0;
+void loop() {
+  String inMsg = Serial.readStringUntil('\n');
+  parseInString(inMsg);
 }
