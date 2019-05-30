@@ -3,10 +3,14 @@
 // Create an IntervalTimer object 
 IntervalTimer nixieTimer;
 
+#define NUM_TUBES 6
+
 #define ANODE0 14
 #define ANODE1 15
 #define ANODE2 16
 #define ANODE3 17
+#define ANODE4 4
+#define ANODE5 5
 
 #define DPL 11
 #define DPR 10
@@ -19,15 +23,15 @@ IntervalTimer nixieTimer;
 #define MICROS_PER_DIGIT 400
 #define MIN_MICROS 10.0
 
-float digitMicros[8] = {0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store current number of "on" microseconds (out of MICROS_PER_DIGIT)
-float digitTargets[8] = {0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
-float digitDeltas[8] = {0}; //array to store number of "on" microseconds to change by (out of MICROS_PER_DIGIT)
-int digitValues[8] = {10,10,10,10,1,2,3,4}; //array to store the value of each digit, and decimal point.
-int DPLValues[8] = {0}; //array to store the value of each digit, and decimal point.
-int DPRValues[8] = {0}; //array to store the value of each digit, and decimal point. 
+float digitMicros[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store current number of "on" microseconds (out of MICROS_PER_DIGIT)
+float digitTargets[NUM_TUBES*2] = {0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
+float digitDeltas[NUM_TUBES*2] = {0}; //array to store number of "on" microseconds to change by (out of MICROS_PER_DIGIT)
+int digitValues[NUM_TUBES*2] = {10,10,10,10,10,10,0,1,2,3,4,5}; //array to store the value of each digit, and decimal point.
+int DPLValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
+int DPRValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point. 
 
 
-const int anodes[4] = {ANODE0, ANODE1, ANODE2, ANODE3}; //array of anode pins
+const int anodes[NUM_TUBES] = {ANODE0, ANODE1, ANODE2, ANODE3, ANODE4, ANODE5}; //array of anode pins
 volatile int anodeIndex = 49; //current anode index
 volatile bool ticToc = true;
 void setupPins() //set up GPIO pins
@@ -36,6 +40,8 @@ void setupPins() //set up GPIO pins
   pinMode(ANODE1, OUTPUT);
   pinMode(ANODE2, OUTPUT);
   pinMode(ANODE3, OUTPUT);
+  pinMode(ANODE4, OUTPUT);
+  pinMode(ANODE5, OUTPUT);
   pinMode(DPL, OUTPUT);
   pinMode(DPR, OUTPUT);
   
@@ -65,7 +71,7 @@ void writeDigit()
     if(digitDeltas[anodeIndex] != 0.0)
     {
       digitMicros[anodeIndex] += digitDeltas[anodeIndex]; //fade
-      if(anodeIndex < 4) //fade down check
+      if(anodeIndex < NUM_TUBES) //fade down check
       {
         if(digitMicros[anodeIndex] <= MIN_MICROS)
         {
@@ -86,7 +92,7 @@ void writeDigit()
     delayMicroseconds(20);
     if((digitMicros[anodeIndex] > MIN_MICROS) && (digitValues[anodeIndex] < 10))
     {
-      digitalWrite(anodes[anodeIndex%4], HIGH);
+      digitalWrite(anodes[anodeIndex%NUM_TUBES], HIGH);
     }
     //stay on for necessary time.
     nixieTimer.begin(writeDigit,int(digitMicros[anodeIndex])); 
@@ -96,14 +102,14 @@ void writeDigit()
   {
     //write "off" to this digit
     //writeValue(anodeIndex%4,10,0,0);
-    digitalWrite(anodes[anodeIndex%4], LOW);
+    digitalWrite(anodes[anodeIndex%NUM_TUBES], LOW);
     
     //stay off for remaining time
     nixieTimer.begin(writeDigit,MICROS_PER_DIGIT-int(digitMicros[anodeIndex])); 
 
     //update pointer to next value.
     anodeIndex++;
-    anodeIndex%=8;
+    anodeIndex%=NUM_TUBES*2;
     ticToc = true;
   } 
   //digitalWrite(13, ticToc);
@@ -119,33 +125,33 @@ void setup() {
   Wire.begin(9);                // join i2c bus with address #9
   Wire.onReceive(wireReceiveEvent); // register event
   
-  nixieTimer.begin(writeDigit,digitMicros[4]);  //set up timer
+  nixieTimer.begin(writeDigit,digitMicros[6]);  //set up timer
   Serial.println("Nixie Display (C) W. Esposito 2018. To update display, send via serial: X Y\\n as ASCII text where X is the tube number and Y is the value 0-10 (where 10 is off). To crossfade to the new value send X Y 1\\n.");
 }
 
 void updateDisplay(int tubeNum, int newValue, bool dpl, bool dpr, float brightnessVal, float fadeTime)
 {
-  tubeNum %=4;
+  tubeNum %=NUM_TUBES;
 
-  DPLValues[tubeNum+4] = dpl;
-  DPRValues[tubeNum+4] = dpr;
+  DPLValues[tubeNum+NUM_TUBES] = dpl;
+  DPRValues[tubeNum+NUM_TUBES] = dpr;
   
-  digitValues[tubeNum] = digitValues[tubeNum+4];
-  digitValues[tubeNum+4] = newValue; //array to store the value of each digit, and decimal point.
+  digitValues[tubeNum] = digitValues[tubeNum+NUM_TUBES];
+  digitValues[tubeNum+NUM_TUBES] = newValue; //array to store the value of each digit, and decimal point.
 
-  digitMicros[tubeNum] = digitMicros[tubeNum+4];
-  digitMicros[tubeNum+4] = MIN_MICROS;
+  digitMicros[tubeNum] = digitMicros[tubeNum+NUM_TUBES];
+  digitMicros[tubeNum+NUM_TUBES] = MIN_MICROS;
 
   digitTargets[tubeNum] = 0;
-  digitTargets[tubeNum+4] = brightnessVal;
+  digitTargets[tubeNum+NUM_TUBES] = brightnessVal;
   
   digitDeltas[tubeNum] = -1.0 * digitMicros[tubeNum] * (8.0 * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
-  digitDeltas[tubeNum+4] = digitTargets[tubeNum+4] * (8.0 * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
+  digitDeltas[tubeNum+NUM_TUBES] = digitTargets[tubeNum+NUM_TUBES] * (8.0 * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
 }
 
 void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr)
 {
-  tubeNum %=4;
+  tubeNum %=NUM_TUBES;
   float fadeTime = 0.4;
   float newBrightness = MICROS_PER_DIGIT/1.1;//random(MIN_MICROS, MICROS_PER_DIGIT-MIN_MICROS);
   updateDisplay(tubeNum, newValue, dpl, dpr, newBrightness, fadeTime);
@@ -153,10 +159,10 @@ void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr)
 
 void newDigit(int tubeNum, int newValue, bool dpl, bool dpr)
 {
-  tubeNum %=4;
-  DPLValues[tubeNum+4] = dpl;
-  DPRValues[tubeNum+4] = dpr;
-  digitValues[tubeNum+4] = newValue;
+  tubeNum %=NUM_TUBES;
+  DPLValues[tubeNum+NUM_TUBES] = dpl;
+  DPRValues[tubeNum+NUM_TUBES] = dpr;
+  digitValues[tubeNum+NUM_TUBES] = newValue;
 }
 
 // function that executes whenever data is received from master
@@ -194,6 +200,14 @@ void parseInString(String inMsg)
     valStr = valStr.substring(0, valStr.length()-1);
   }
   int newVal = valStr.toInt();
+  if (newVal < 10)
+  {
+    newVal--;
+    if (newVal == -1)
+    {
+      newVal = 9;
+    }
+  }
   inMsg = inMsg.substring(inMsg.indexOf(" ")).trim();
   int fadeFlag = inMsg.substring(0, inMsg.indexOf(" ")).toInt();
   inMsg = inMsg.substring(inMsg.indexOf(" ")).trim();
