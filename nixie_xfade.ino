@@ -20,19 +20,21 @@ IntervalTimer nixieTimer;
 #define BCD2 21
 #define BCD3 20
 
-#define MICROS_PER_DIGIT 400
+#define MICROS_PER_DIGIT 600
 #define MIN_MICROS 10.0
+#define BLANK_VAL 10
 
 float digitMicros[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store current number of "on" microseconds (out of MICROS_PER_DIGIT)
 float digitTargets[NUM_TUBES*2] = {0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
 float digitDeltas[NUM_TUBES*2] = {0}; //array to store number of "on" microseconds to change by (out of MICROS_PER_DIGIT)
-int digitValues[NUM_TUBES*2] = {10,10,10,10,10,10,0,1,2,3,4,5}; //array to store the value of each digit, and decimal point.
+int digitValues[NUM_TUBES*2] = {BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,0,1,2,3,4,5}; //array to store the value of each digit, and decimal point.
 int DPLValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
-int DPRValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point. 
+int DPRValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
+int blinkFlags[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point. 
 
 
 const int anodes[NUM_TUBES] = {ANODE0, ANODE1, ANODE2, ANODE3, ANODE4, ANODE5}; //array of anode pins
-volatile int anodeIndex = 49; //current anode index
+volatile int anodeIndex = 6; //current anode index
 volatile bool ticToc = true;
 void setupPins() //set up GPIO pins
 {
@@ -64,22 +66,27 @@ void writeDigit()
 {
   if(ticToc)
   {
+    int value = digitValues[anodeIndex];
     //write value to this digit
-    writeValue(digitValues[anodeIndex],DPLValues[anodeIndex],DPRValues[anodeIndex]);
+    if(blinkFlags[anodeIndex] && (millis()%1000 > 500))
+    {
+      value = 0xFF;
+    }
+    writeValue(value,DPLValues[anodeIndex],DPRValues[anodeIndex]);
 
     //compute necessary time
     if(digitDeltas[anodeIndex] != 0.0)
     {
       digitMicros[anodeIndex] += digitDeltas[anodeIndex]; //fade
-      if(anodeIndex < NUM_TUBES) //fade down check
+      if(anodeIndex < NUM_TUBES) //fist half of the array, fade down check
       {
         if(digitMicros[anodeIndex] <= MIN_MICROS)
         {
-          digitMicros[anodeIndex] = 0.0;
+          digitMicros[anodeIndex] = MIN_MICROS;
           digitDeltas[anodeIndex] = 0.0;
         }
       }
-      else //fade up check
+      else //second half of the array, fade up check
       {
         if(digitMicros[anodeIndex] >= digitTargets[anodeIndex])
         {
@@ -89,7 +96,8 @@ void writeDigit()
       }
     }
     
-    delayMicroseconds(20);
+    //delayMicroseconds(20); //for ghosting
+    
     if((digitMicros[anodeIndex] > MIN_MICROS) && (digitValues[anodeIndex] < 10))
     {
       digitalWrite(anodes[anodeIndex%NUM_TUBES], HIGH);
@@ -125,16 +133,17 @@ void setup() {
   Wire.begin(9);                // join i2c bus with address #9
   Wire.onReceive(wireReceiveEvent); // register event
   
-  nixieTimer.begin(writeDigit,digitMicros[6]);  //set up timer
+  nixieTimer.begin(writeDigit,MICROS_PER_DIGIT);  //set up timer
   Serial.println("Nixie Display (C) W. Esposito 2018. To update display, send via serial: X Y\\n as ASCII text where X is the tube number and Y is the value 0-10 (where 10 is off). To crossfade to the new value send X Y 1\\n.");
 }
 
-void updateDisplay(int tubeNum, int newValue, bool dpl, bool dpr, float brightnessVal, float fadeTime)
+void updateDisplay(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag, float brightnessVal, float fadeTime)
 {
   tubeNum %=NUM_TUBES;
 
   DPLValues[tubeNum+NUM_TUBES] = dpl;
   DPRValues[tubeNum+NUM_TUBES] = dpr;
+  blinkFlags[tubeNum+NUM_TUBES] = blinkFlag;
   
   digitValues[tubeNum] = digitValues[tubeNum+NUM_TUBES];
   digitValues[tubeNum+NUM_TUBES] = newValue; //array to store the value of each digit, and decimal point.
@@ -145,23 +154,24 @@ void updateDisplay(int tubeNum, int newValue, bool dpl, bool dpr, float brightne
   digitTargets[tubeNum] = 0;
   digitTargets[tubeNum+NUM_TUBES] = brightnessVal;
   
-  digitDeltas[tubeNum] = -1.0 * digitMicros[tubeNum] * (8.0 * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
-  digitDeltas[tubeNum+NUM_TUBES] = digitTargets[tubeNum+NUM_TUBES] * (8.0 * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
+  digitDeltas[tubeNum] = -1.0 * digitMicros[tubeNum] * (2.0 * NUM_TUBES * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
+  digitDeltas[tubeNum+NUM_TUBES] = digitTargets[tubeNum+NUM_TUBES] * (2.0 * NUM_TUBES * MICROS_PER_DIGIT) / (fadeTime * 1000000.0); //array to store number of "on" microseconds (out of MICROS_PER_DIGIT)
 }
 
-void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr)
+void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag)
 {
   tubeNum %=NUM_TUBES;
   float fadeTime = 0.4;
   float newBrightness = MICROS_PER_DIGIT/1.1;//random(MIN_MICROS, MICROS_PER_DIGIT-MIN_MICROS);
-  updateDisplay(tubeNum, newValue, dpl, dpr, newBrightness, fadeTime);
+  updateDisplay(tubeNum, newValue, dpl, dpr, blinkFlag, newBrightness, fadeTime);
 }
 
-void newDigit(int tubeNum, int newValue, bool dpl, bool dpr)
+void newDigit(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag)
 {
   tubeNum %=NUM_TUBES;
   DPLValues[tubeNum+NUM_TUBES] = dpl;
   DPRValues[tubeNum+NUM_TUBES] = dpr;
+  blinkFlags[tubeNum+NUM_TUBES] = blinkFlag;
   digitValues[tubeNum+NUM_TUBES] = newValue;
 }
 
@@ -172,6 +182,7 @@ void wireReceiveEvent(int howMany)
 {
   while(Wire.available() > 1) {  // loop through all but the last
     char c = Wire.read();        // receive byte as a character
+    //Serial.println(c);
     wireBuffer += c;
     if(c == '\n')
     {
@@ -189,6 +200,12 @@ void parseInString(String inMsg)
   String valStr = inMsg.substring(0, inMsg.indexOf(" ")).trim();
   bool dpl = false;
   bool dpr = false;
+  bool blinkFlag = false;
+  if(valStr[0] == 'b')
+  {
+    blinkFlag = true;
+    valStr = valStr.substring(1);
+  }
   if(valStr[0] == '.')
   {
     dpl = true;
@@ -212,13 +229,16 @@ void parseInString(String inMsg)
   int fadeFlag = inMsg.substring(0, inMsg.indexOf(" ")).toInt();
   inMsg = inMsg.substring(inMsg.indexOf(" ")).trim();
 
-  if(fadeFlag)
+  if(newVal != digitValues[NUM_TUBES+tubeVal]) //first, check if the recieved value causes the display to actually change
   {
-    newDigitFade(tubeVal, newVal, dpl, dpr);
-  }
-  else
-  {
-    newDigit(tubeVal, newVal, dpl, dpr);
+    if(fadeFlag)
+    {
+      newDigitFade(tubeVal, newVal, dpl, dpr, blinkFlag);
+    }
+    else
+    {
+      newDigit(tubeVal, newVal, dpl, dpr, blinkFlag);
+    }
   }
 }
 
