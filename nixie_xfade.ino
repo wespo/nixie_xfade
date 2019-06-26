@@ -25,7 +25,7 @@ IntervalTimer nixieTimer;
 #define BLANK_VAL 10
 
 float digitMicros[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store current number of "on" microseconds (out of MICROS_PER_DIGIT)
-float digitTargets[NUM_TUBES*2] = {0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
+float digitTargets[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
 float digitDeltas[NUM_TUBES*2] = {0}; //array to store number of "on" microseconds to change by (out of MICROS_PER_DIGIT)
 int digitValues[NUM_TUBES*2] = {BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,0,1,2,3,4,5}; //array to store the value of each digit, and decimal point.
 int DPLValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
@@ -96,9 +96,10 @@ void writeDigit()
       }
     }
     
-    //delayMicroseconds(20); //for ghosting
+    //
+    delayMicroseconds(20); //for ghosting
     
-    if((digitMicros[anodeIndex] > MIN_MICROS) && (digitValues[anodeIndex] < 10))
+    if((digitMicros[anodeIndex] > MIN_MICROS) && (value < 10))
     {
       digitalWrite(anodes[anodeIndex%NUM_TUBES], HIGH);
     }
@@ -160,6 +161,8 @@ void updateDisplay(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag
 
 void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag)
 {
+  Serial.print("Val: ");
+  Serial.println(newValue);
   tubeNum %=NUM_TUBES;
   float fadeTime = 0.4;
   float newBrightness = MICROS_PER_DIGIT/1.1;//random(MIN_MICROS, MICROS_PER_DIGIT-MIN_MICROS);
@@ -168,6 +171,8 @@ void newDigitFade(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag)
 
 void newDigit(int tubeNum, int newValue, bool dpl, bool dpr, bool blinkFlag)
 {
+  Serial.print("Val: ");
+  Serial.println(newValue);
   tubeNum %=NUM_TUBES;
   DPLValues[tubeNum+NUM_TUBES] = dpl;
   DPRValues[tubeNum+NUM_TUBES] = dpr;
@@ -195,6 +200,8 @@ void wireReceiveEvent(int howMany)
 
 void parseInString(String inMsg)
 {
+  Serial.print("Recv'd: ");
+  Serial.println(inMsg);
   int tubeVal = inMsg.substring(0, inMsg.indexOf(" ")).toInt();
   inMsg = inMsg.substring(inMsg.indexOf(" ")).trim();
   String valStr = inMsg.substring(0, inMsg.indexOf(" ")).trim();
@@ -239,6 +246,10 @@ void parseInString(String inMsg)
     {
       newDigit(tubeVal, newVal, dpl, dpr, blinkFlag);
     }
+  }
+  else
+  {
+    newDigit(tubeVal, newVal, dpl, dpr, blinkFlag);
   }
 }
 
