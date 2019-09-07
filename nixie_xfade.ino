@@ -28,8 +28,8 @@ float digitMicros[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DI
 float digitTargets[NUM_TUBES*2] = {0,0,0,0,0,0,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1,MICROS_PER_DIGIT/1.1}; //array to store target number of "on" microseconds (out of MICROS_PER_DIGIT)
 float digitDeltas[NUM_TUBES*2] = {0}; //array to store number of "on" microseconds to change by (out of MICROS_PER_DIGIT)
 int digitValues[NUM_TUBES*2] = {BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,BLANK_VAL,0,1,2,3,4,5}; //array to store the value of each digit, and decimal point.
-int DPLValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
-int DPRValues[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point.
+int DPLValues[NUM_TUBES*2] = {1,1,1,1,1,1,1,1,1,1,1,1}; //array to store the value of each digit, and decimal point.
+int DPRValues[NUM_TUBES*2] = {1,1,1,1,1,1,1,1,1,1,1,1}; //array to store the value of each digit, and decimal point.
 int blinkFlags[NUM_TUBES*2] = {0}; //array to store the value of each digit, and decimal point. 
 
 
@@ -99,7 +99,7 @@ void writeDigit()
     //
     delayMicroseconds(20); //for ghosting
     
-    if((digitMicros[anodeIndex] > MIN_MICROS) && (value < 10))
+    if( (digitMicros[anodeIndex] > MIN_MICROS) && ((value < 10) || (DPLValues[anodeIndex] > 0) || (DPRValues[anodeIndex] > 0))  )
     {
       digitalWrite(anodes[anodeIndex%NUM_TUBES], HIGH);
     }
